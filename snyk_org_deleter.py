@@ -204,7 +204,8 @@ class SnykOrgDeleter:
                     continue
                 
                 # Log the response details for debugging
-                if response.status_code != 200:
+                # 204 No Content is also a success status for DELETE operations
+                if response.status_code not in [200, 204]:
                     self.logger.error(f"Delete failed with status {response.status_code}")
                     try:
                         error_data = response.json()
@@ -230,7 +231,8 @@ class SnykOrgDeleter:
                             
                             # Retry the organization deletion
                             retry_response = self.session.delete(url, headers=headers)
-                            if retry_response.status_code == 200:
+                            # 204 No Content is also a success status for DELETE operations
+                            if retry_response.status_code in [200, 204]:
                                 self.logger.info(f"Successfully deleted organization {org_id} after project cleanup")
                                 return True
                             else:
@@ -239,6 +241,11 @@ class SnykOrgDeleter:
                         
                     except:
                         self.logger.error(f"Error response text: {response.text}")
+                
+                # 204 No Content is also a success status for DELETE operations
+                if response.status_code in [200, 204]:
+                    self.logger.info(f"Successfully deleted organization {org_id}")
+                    return True
                 
                 response.raise_for_status()
                 self.logger.info(f"Successfully deleted organization {org_id}")
@@ -506,14 +513,27 @@ class SnykOrgDeleter:
                     self.rate_limiter.handle_429(f"DELETE project {project_id}")
                     continue
                 
+                # 404 means project not found (already deleted) - treat as success
+                if response.status_code == 404:
+                    self.logger.debug(f"Project {project_id} not found (already deleted)")
+                    return True
+                
+                # 204 No Content is also a success status for DELETE operations
+                if response.status_code in [200, 204]:
+                    self.logger.info(f"Successfully deleted project {project_id} from org {org_id}")
+                    return True
+                
                 response.raise_for_status()
-                self.logger.info(f"Successfully deleted project {project_id} from org {org_id}")
                 return True
                 
             except requests.exceptions.RequestException as e:
                 if response.status_code == 429:
                     self.rate_limiter.handle_429(f"DELETE project {project_id}")
                     continue
+                elif response.status_code == 404:
+                    # Project not found - already deleted, treat as success
+                    self.logger.debug(f"Project {project_id} not found (already deleted)")
+                    return True
                 else:
                     self.logger.error(f"Error deleting project {project_id} from org {org_id}: {e}")
                     if attempt == max_retries - 1:
@@ -653,14 +673,27 @@ class SnykOrgDeleter:
                     self.rate_limiter.handle_429(f"DELETE target {target_id}")
                     continue
                 
+                # 404 means target not found (already deleted) - treat as success
+                if response.status_code == 404:
+                    self.logger.debug(f"Target {target_id} not found (already deleted)")
+                    return True
+                
+                # 204 No Content is also a success status for DELETE operations
+                if response.status_code in [200, 204]:
+                    self.logger.info(f"Successfully deleted target {target_id} from org {org_id}")
+                    return True
+                
                 response.raise_for_status()
-                self.logger.info(f"Successfully deleted target {target_id} from org {org_id}")
                 return True
                 
             except requests.exceptions.RequestException as e:
                 if response.status_code == 429:
                     self.rate_limiter.handle_429(f"DELETE target {target_id}")
                     continue
+                elif response.status_code == 404:
+                    # Target not found - already deleted, treat as success
+                    self.logger.debug(f"Target {target_id} not found (already deleted)")
+                    return True
                 else:
                     self.logger.error(f"Error deleting target {target_id} from org {org_id}: {e}")
                     if attempt == max_retries - 1:
